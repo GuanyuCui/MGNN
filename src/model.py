@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import ModuleList
-from torch_geometric.nn import MessagePassing, Linear, MLP, GCNConv, SGConv, GCN2Conv
+from torch_geometric.nn import MessagePassing, Linear, MLP, GCNConv, SGConv, GCN2Conv, PointNetConv
 from torch_geometric.nn.conv import APPNP as _APPNP
 from torch_geometric.utils import degree, add_self_loops
 from math import log
@@ -418,3 +418,36 @@ class pGNN(torch.nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.conv1(x, edge_index, edge_weight)        
         return F.log_softmax(x, dim=1)
+
+
+class PointNet(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, 
+                num_layers, dropout):
+        super(PointNet, self).__init__()
+        self.in_channels = in_channels
+        self.hidden_channels = hidden_channels
+        self.out_channels = out_channels
+        self.num_layers = num_layers
+        self.dropout = dropout
+
+        self.initial = MLP(channel_list = [self.in_channels, self.hidden_channels, self.hidden_channels], dropout = self.dropout, norm = None)
+        self.pos_gen = MLP(channel_list = [self.hidden_channels, self.hidden_channels, 3], dropout = self.dropout, norm = None)
+
+        self.local_nn = MLP(channel_list = [self.hidden_channels + 3, self.hidden_channels], dropout = self.dropout, norm = None)
+        self.global_nn = MLP(channel_list = [self.hidden_channels, self.hidden_channels], dropout = self.dropout, norm = None) 
+
+        self.convs = ModuleList()
+        for i in range(self.num_layers):
+            self.convs.append(PointNetConv(local_nn = self.local_nn, global_nn = self.global_nn))
+        self.final = Linear(in_channels = self.hidden_channels, out_channels = self.out_channels, weight_initializer = 'glorot')
+
+    def forward(self, x, edge_index):
+        x = self.initial(x)
+        x_0 = x
+        pos = self.pos_gen(x_0)
+        for i in range(self.num_layers):
+            x = self.convs[i].forward(x = x, edge_index = edge_index, pos = pos)
+            x = F.dropout(x, p = self.dropout, training = self.training, inplace = True)
+            x = F.relu(x, inplace = True)
+        x = self.final(x)
+        return x

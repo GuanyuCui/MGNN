@@ -1,7 +1,7 @@
-from torch_geometric.nn.models import GCN, GAT, LINKX
+from torch_geometric.nn.models import GCN, GAT, GIN, LINKX
 from torch_geometric.datasets import Planetoid, CoraFull, Amazon, Coauthor, WebKB, WikipediaNetwork, Actor, DeezerEurope, WikiCS, LINKXDataset
 from ogb.nodeproppred import PygNodePropPredDataset
-from model import MyLinear, MyMLP, SGC, APPNP, GCNII, MGNN, pGNN
+from model import MyLinear, MyMLP, SGC, APPNP, GCNII, MGNN, pGNN, PointNet
 
 def get_model(model : str, dataset, args):
 	if model == 'Linear':
@@ -69,6 +69,18 @@ def get_model(model : str, dataset, args):
                  	p = args['theta'],
                  	K = args['num_layers'],
                 	dropout = args['dropout'])
+	elif model == 'GIN':
+		model = GIN(in_channels = dataset.data.num_features,
+					hidden_channels = args['hidden_dim'], 
+					out_channels = dataset.num_classes, 
+					num_layers = args['num_layers'],
+					dropout = args['dropout'])
+	elif model == 'PointNet':
+		model = PointNet(in_channels = dataset.data.num_features,
+					hidden_channels = args['hidden_dim'], 
+					out_channels = dataset.num_classes, 
+					num_layers = args['num_layers'],
+					dropout = args['dropout'])
 	return model
 
 def get_dataset(root : str, name : str):
